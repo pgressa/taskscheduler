@@ -15,12 +15,17 @@
  */
 package com.example.service;
 
+import com.example.bo.JobParam;
 import com.example.bo.TaskDefinition;
+import com.example.jobs.Job;
+import io.micronaut.context.BeanContext;
+import io.micronaut.inject.BeanConfiguration;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * @author Pavol Gressa
@@ -30,10 +35,29 @@ public class ExecutionService {
 
     public static final Logger log = LoggerFactory.getLogger(ExecutionService.class);
 
+    private final BeanContext beanContext;
+
+    public ExecutionService(BeanContext beanContext) {
+        this.beanContext = beanContext;
+    }
+
     public void execute(TaskDefinition taskDefinition) {
         log.info("EXECUTING: {}", taskDefinition);
         try {
-            Thread.currentThread().wait(Duration.ofSeconds(10).toMillis());
+            try {
+                Class c = Class.forName(taskDefinition.getJobClass());
+                Object bean = beanContext.createBean(c);
+                if (bean instanceof Job) {
+                    Job job = (Job) bean;
+                    job.execute(new JobParam(taskDefinition.getParamsInfo()));
+                } else {
+                    log.error("Failed to create a bean");
+                }
+
+            } catch (ClassNotFoundException e) {
+                log.error("Failed to find class " + taskDefinition.getJobClass());
+            }
+            Thread.currentThread().wait(Duration.ofSeconds(5).toMillis());
         } catch (InterruptedException e) {
             log.info("Execution of " + taskDefinition + " interrupted ");
         }
